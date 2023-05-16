@@ -1,0 +1,58 @@
+import axios from 'axios';
+import ffmpeg from 'fluent-ffmpeg';
+import installer from '@ffmpeg-installer/ffmpeg'
+import { createWriteStream } from 'fs';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { removeFile } from './fileRemover.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+class OggConverter {
+    constructor() {
+        ffmpeg.setFfmpegPath(installer.path);
+    }
+
+    toMp3(oggPath, outputFileName) {
+        try {
+            const mp3Path = resolve(dirname(oggPath), `${outputFileName}.mp3`);
+
+            return new Promise( (resolve, reject) => {
+                ffmpeg(oggPath)
+                    .inputOption('-t 30')
+                    .output(mp3Path)
+                    .on('end', () => {
+                        resolve(mp3Path);
+                        removeFile(oggPath);
+                    })
+                    .on('error', (error) => reject(error.message))
+                    .run();
+            } );
+
+        } catch (error) {
+            console.log('Error while converting to mp3', error.message);
+        };
+    }
+
+    async create(url, filename) {
+        try {
+            const oggPath = resolve(__dirname, '../voiceMessages', `${filename}.ogg`);
+            const response = await axios({
+                method: 'get',
+                url,
+                responseType: 'stream',
+            });
+
+            return new Promise((resolve) => {
+                const stream = createWriteStream(oggPath);
+                response.data.pipe(stream);
+                stream.on('finish', () => resolve(oggPath));
+            });
+
+        } catch (error) {
+            console.log('Error while creating OggConverter', error.message);
+        }
+    }
+}
+
+export const ogg = new OggConverter();
